@@ -11,6 +11,20 @@
 #include <g4main/PHG4VtxPoint.h>
 #include <g4main/PHG4Hit.h>
 
+#include <trackbase/TrkrCluster.h>
+#include <trackbase/TrkrClusterv3.h>
+#include <trackbase/TrkrClusterv4.h>
+#include <trackbase/TrkrHit.h>
+#include <trackbase/TrkrHitSetContainer.h>
+#include <trackbase/TrkrDefs.h>
+#include <trackbase/ActsGeometry.h>
+#include <trackbase/ClusterErrorPara.h>
+#include <trackbase/TpcDefs.h>
+#include <trackbase/TrkrClusterContainer.h>
+#include <trackbase/TrkrHitSet.h>
+#include <trackbase/TrkrClusterHitAssoc.h>
+#include <trackbase/TrkrClusterIterationMapv1.h>
+
 #include <trackbase_historic/SvtxVertexMap.h>
 #include <trackbase_historic/SvtxVertex.h>
 #include <trackbase_historic/SvtxTrackMap.h>
@@ -61,7 +75,7 @@ RecoInfoExport::process_event(PHCompositeNode *topNode)
   ++_event;
 
   stringstream fname;
-  fname << _file_prefix << "_Event" << _event << ".dat";
+  fname << _file_prefix << "event" << _event << ".json";
   fstream fdata(fname.str(), ios_base::out);
   fdata << "{" << endl;
   fdata << "\"HITS\": {" << endl;
@@ -101,8 +115,8 @@ RecoInfoExport::process_event(PHCompositeNode *topNode)
               good_towers.insert(tower);
             }
         }
-        fdata <<"\""<<calo_name <<"\": [";
-
+        
+      fdata <<"\""<<calo_name <<"\": [";
 
       bool first = true;
       for (const auto & tower : good_towers)
@@ -135,137 +149,84 @@ RecoInfoExport::process_event(PHCompositeNode *topNode)
         fdata << "}," << endl;
         fdata << "\"TRACKS\": {" << endl;
         fdata << "\"TRUTHINFO\": [" << endl;
-
-      // need things off of the DST...
-      PHG4TruthInfoContainer* truthinfo = findNode::getClass<
-          PHG4TruthInfoContainer>(topNode, "G4TruthInfo");
-      if (!truthinfo)
+        
+         
+        stringstream spts;
+        int t = 1;
+        int c = -1;
+        bool first = true;
+        
+        SvtxTrackMap* trackmap = findNode::getClass<SvtxTrackMap>(topNode, "SvtxTrackMap");
+        TrkrClusterContainer* clustermap = findNode::getClass<TrkrClusterContainer>(topNode, "CORRECTED_TRKR_CLUSTER");
+        if(!clustermap)
+        clustermap = findNode::getClass<TrkrClusterContainer>(topNode, "TRKR_CLUSTER");
+        ActsGeometry *tgeometry = findNode::getClass<ActsGeometry>(topNode,"ActsGeometry");
+        if(!tgeometry)
         {
-          cerr << PHWHERE << " ERROR: Can't find G4TruthInfo" << endl;
-          exit(-1);
+         std::cout << PHWHERE << "No Acts geometry on node tree. Can't  continue."
+               << std::endl;
         }
-
-      // create SVTX eval stack
-      SvtxEvalStack svtxevalstack(topNode);
-
-//  SvtxVertexEval* vertexeval = svtxevalstack.get_vertex_eval();
-//  SvtxTrackEval* trackeval = svtxevalstack.get_track_eval();
-      SvtxTruthEval* trutheval = svtxevalstack.get_truth_eval();
-
-      // loop over all truth particles
-      PHG4TruthInfoContainer::Range range =
-          truthinfo->GetPrimaryParticleRange();
-      for (PHG4TruthInfoContainer::ConstIterator iter = range.first;
-          iter != range.second; ++iter)
+        
+        for (SvtxTrackMap::Iter iter = trackmap->begin(); iter != trackmap->end(); ++iter)
         {
-          PHG4Particle* g4particle = iter->second;
-
-          const TVector3 mom(g4particle->get_px(), g4particle->get_py(),
-              g4particle->get_pz());
-
-          std::set<PHG4Hit*> g4hits = trutheval->all_truth_hits(g4particle);
-
-          map<float, PHG4Hit *> time_sort;
-          map<float, PHG4Hit *> layer_sort;
-          for (auto & hit : g4hits)
+          SvtxTrack* track = iter->second;
+          std::vector<TrkrDefs::cluskey> clusters;
+          auto tpcseed = track->get_tpc_seed();
+          if(tpcseed)
+          {
+            for (auto iter = tpcseed->begin_cluster_keys(); iter != tpcseed->end_cluster_keys(); ++iter)
             {
-              if (hit)
-                {
-                  time_sort[hit->get_avg_t()] = hit;
-                }
+               TrkrDefs::cluskey cluster_key = *iter;
+               clusters.push_back(cluster_key);
             }
+          }
 
-          for (auto & hit_pair : time_sort)
-            {
+        for(unsigned int iclus = 0; iclus < clusters.size(); ++iclus)
+        {
+          TrkrDefs::cluskey cluster_key = clusters[iclus];
+          TrkrCluster* cluster = clustermap->findCluster(cluster_key);
+          if(!cluster) continue;
+          Acts::Vector3 glob = tgeometry->getGlobalPosition(cluster_key, cluster);
+          float x = glob(0);
+          float y = glob(1);
+          float z = glob(2);
+          TVector3 pos(x, y, z);
 
-              if (hit_pair.second->get_layer() != UINT_MAX
-                  and layer_sort.find(hit_pair.second->get_layer())
-                      == layer_sort.end())
-                {
-                  layer_sort[hit_pair.second->get_layer()] = hit_pair.second;
-                }
-            }
-
-          if (layer_sort.size() > 5 and mom.Pt() > _pT_threshold) // minimal track length cut
-            {
-
-              stringstream spts;
-
-              TVector3 last_pos(0, 0, 0);
-
-              bool first = true;
-              for (auto & hit_pair : layer_sort)
-                {
-                  TVector3 pos(hit_pair.second->get_avg_x(),
-                      hit_pair.second->get_avg_y(),
-                      hit_pair.second->get_avg_z());
-
-                  // hit step cuts
-                  if ((pos - last_pos).Mag() < _min_track_hit_dist
-                      and hit_pair.first != (layer_sort.rbegin()->first)
-                      and hit_pair.first != (layer_sort.begin()->first))
-                    continue;
-
-                  last_pos = pos;
-
-                  if (first)
-                    {
-                      first = false;
-                    }
-                  else
-                    spts << ",";
-
-                  spts << "[";
-                  spts << pos.x();
-                  spts << ",";
-                  spts << pos.y();
-                  spts << ",";
-                  spts << pos.z();
-                  spts << "]";
-                }
-
-              const int abs_pid = abs(g4particle->get_pid());
-              int t = 5;
-              if (abs_pid
-                  == TDatabasePDG::Instance()->GetParticle("pi+")->PdgCode())
-                {
-                  t = 1;
-                }
-              else if (abs_pid
-                  == TDatabasePDG::Instance()->GetParticle("proton")->PdgCode())
-                {
-                  t = 2;
-                }
-              else if (abs_pid
-                  == TDatabasePDG::Instance()->GetParticle("K+")->PdgCode())
-                {
-                  t = 3;
-                }
-              else if (abs_pid
-                  == TDatabasePDG::Instance()->GetParticle("e-")->PdgCode())
-                {
-                  t = 3;
-                }
-
-              const TParticlePDG * pdg_part =
-                  TDatabasePDG::Instance()->GetParticle(11);
-              const int c =
-                  (pdg_part != nullptr) ? (copysign(1, pdg_part->Charge())) : 0;
-
-              fdata
-                  << (boost::format(
-                      "{ \"pt\": %1%, \"t\": %2%, \"e\": %3%, \"p\": %4%, \"c\": %5%, \"pts\":[ %6% ]}")
-                      % mom.Pt() % t % mom.PseudoRapidity() % mom.Phi() % c
-                      % spts.str()) << endl;
-                      fdata << "]" << endl;
-                      fdata << "}}" << endl;
-            }
+          float px = track->get_px();
+          float py = track->get_py();
+          float pz = track->get_pz();
+          TVector3 mom(px, py, pz);       
+         
+          if (first)
+          {
+             first = false;
+          }
+            
+          else
+            
+          spts << ",";
+          spts << "[";
+          spts << pos.x();
+          spts << ",";
+          spts << pos.y();
+          spts << ",";
+          spts << pos.z();
+          spts << "]";
+          fdata << (boost::format(
+                    "{ \"pt\": %1%, \"t\": %2%, \"e\": %3%, \"p\": %4%, \"c\": %5%, \"pts\":[ %6% ]}")
+                    % mom.Perp() % t % pos.Eta() % pos.Phi() % c
+                    % spts.str()) << endl;
         }
-    }
+        }
+       } 
 
-  fdata.close();
-  return 0;
+   fdata << "]" << endl;
+   fdata << "}}" << endl;
+   fdata.close();
+   return 0;
+ 
 }
+
 
 int
 RecoInfoExport::End(PHCompositeNode *topNode)
