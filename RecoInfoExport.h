@@ -2,12 +2,20 @@
 #define __RecoInfoExport_H__
 
 #include <fun4all/SubsysReco.h>
+
+
 #include <string>
 #include <vector>
 #include <TH1D.h>
 #include <TH2D.h>
 
 class PHCompositeNode;
+
+class TrkrCluster;
+class TrkrClusterContainer;
+class TrkrClusterHitAssoc;
+class TrkrHitTruthAssoc;
+class SvtxTruthEval;
 
 class RecoInfoExport : public SubsysReco
 {
