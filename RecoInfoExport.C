@@ -154,71 +154,71 @@ RecoInfoExport::process_event(PHCompositeNode *topNode)
         stringstream spts;
         int t = 1;
         int c = -1;
-        bool first = true;
         
         SvtxTrackMap* trackmap = findNode::getClass<SvtxTrackMap>(topNode, "SvtxTrackMap");
-        TrkrClusterContainer* clustermap = findNode::getClass<TrkrClusterContainer>(topNode, "CORRECTED_TRKR_CLUSTER");
-        if(!clustermap)
-        clustermap = findNode::getClass<TrkrClusterContainer>(topNode, "TRKR_CLUSTER");
-        ActsGeometry *tgeometry = findNode::getClass<ActsGeometry>(topNode,"ActsGeometry");
-        if(!tgeometry)
+        TrkrClusterContainer *clusterContainer = findNode::getClass<TrkrClusterContainer>(topNode, "TRKR_CLUSTER");
+        ActsGeometry *geometry = findNode::getClass<ActsGeometry>(topNode, "ActsGeometry");
+        if(!geometry)
         {
          std::cout << PHWHERE << "No Acts geometry on node tree. Can't  continue."
                << std::endl;
         }
         
+        float x = 0.; float y = 0.; float z = 0.;
+        float px = 0.; float py = 0.; float pz = 0.;
+        TVector3 pos; TVector3 mom;
+        
+        bool first = true;
+
         for (SvtxTrackMap::Iter iter = trackmap->begin(); iter != trackmap->end(); ++iter)
         {
           SvtxTrack* track = iter->second;
-          std::vector<TrkrDefs::cluskey> clusters;
+          px = track->get_px();
+          py = track->get_py();
+          pz = track->get_pz();
+          mom.SetX(px); mom.SetY(py); mom.SetZ(pz);
+            
           auto tpcseed = track->get_tpc_seed();
+            
           if(tpcseed)
-          {
-            for (auto iter = tpcseed->begin_cluster_keys(); iter != tpcseed->end_cluster_keys(); ++iter)
             {
-               TrkrDefs::cluskey cluster_key = *iter;
-               clusters.push_back(cluster_key);
+              for (auto iter = tpcseed->begin_cluster_keys(); iter != tpcseed->end_cluster_keys(); ++iter)
+                {
+                    TrkrDefs::cluskey cluster_key = *iter;
+                    TrkrCluster* cluster = clusterContainer->findCluster(cluster_key);
+                    if(!cluster) continue;
+                    Acts::Vector3 globalClusterPosition = geometry->getGlobalPosition(cluster_key, cluster);
+                    x = globalClusterPosition(0);
+                    y = globalClusterPosition(1);
+                    z = globalClusterPosition(2);
+                    pos.SetX(x); pos.SetY(y); pos.SetZ(z);
+                    
+                    if (first)
+                    {
+                      first = false;
+                    }
+                             
+                    else
+                    spts << ",";
+                    spts << "[";
+                    spts << pos.x();
+                    spts << ",";
+                    spts << pos.y();
+                    spts << ",";
+                    spts << pos.z();
+                    spts << "]";
+                }
+                    
+                    fdata
+                       << (boost::format(
+                           "{ \"pt\": %1%, \"t\": %2%, \"e\": %3%, \"p\": %4%, \"c\": %5%, \"pts\":[ %6% ]},")
+                           % mom.Pt() % t % mom.PseudoRapidity() % mom.Phi() % c
+                           % spts.str()) << endl;
+                           spts.clear() ;
+                           spts.str("") ;
             }
           }
-
-        for(unsigned int iclus = 0; iclus < clusters.size(); ++iclus)
-        {
-          TrkrDefs::cluskey cluster_key = clusters[iclus];
-          TrkrCluster* cluster = clustermap->findCluster(cluster_key);
-          if(!cluster) continue;
-          Acts::Vector3 glob = tgeometry->getGlobalPosition(cluster_key, cluster);
-          float x = glob(0);
-          float y = glob(1);
-          float z = glob(2);
-          TVector3 pos(x, y, z);
-
-          float px = track->get_px();
-          float py = track->get_py();
-          float pz = track->get_pz();
-          TVector3 mom(px, py, pz);       
-         
-          if (first)
-          {
-             first = false;
-          }
-            
-          else
-            
-          spts << ",";
-          spts << "[";
-          spts << pos.x();
-          spts << ",";
-          spts << pos.y();
-          spts << ",";
-          spts << pos.z();
-          spts << "]";
-          fdata << (boost::format(
-                    "{ \"pt\": %1%, \"t\": %2%, \"e\": %3%, \"p\": %4%, \"c\": %5%, \"pts\":[ %6% ]}")
-                    % mom.Perp() % t % pos.Eta() % pos.Phi() % c
-                    % spts.str()) << endl;
-        }
-        }
-       } 
+       }
 
    fdata << "]" << endl;
    fdata << "}}" << endl;
@@ -233,3 +233,4 @@ RecoInfoExport::End(PHCompositeNode *topNode)
 {
   return 0;
 }
+
