@@ -2,7 +2,8 @@
 #define __RecoInfoExport_H__
 
 #include <fun4all/SubsysReco.h>
-
+//#include <trackbase/TrkrDefs.h>
+//#include <trackbase/ActsGeometry.h>
 
 #include <string>
 #include <vector>
@@ -73,6 +74,20 @@ public:
   {
     _min_track_hit_dist = minTrackHitDist;
   }
+    
+  double
+  get_tower_phi_shift() const
+  {
+    return _tower_PhiShift;
+  }
+
+  void
+  set_tower_phi_shift(double towerPhiShift)
+  {
+    _tower_PhiShift = towerPhiShift;
+  }
+    
+    
 private:
 
   int _event;
@@ -83,6 +98,8 @@ private:
   double _tower_threshold;
   double _pT_threshold;
   double _min_track_hit_dist;
+  double _tower_PhiShift;
+
 };
 
 #endif // __RecoInfoExport_H__
