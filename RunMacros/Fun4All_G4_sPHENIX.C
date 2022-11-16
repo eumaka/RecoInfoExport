@@ -143,7 +143,8 @@ int Fun4All_G4_sPHENIX(
     INPUTGENERATOR::SimpleEventGenerator[0]->set_vertex_distribution_function(PHG4SimpleEventGenerator::Uniform,
                                                                                 PHG4SimpleEventGenerator::Uniform,
                                                                                 PHG4SimpleEventGenerator::Uniform);
-    INPUTGENERATOR::SimpleEventGenerator[0]->set_vertex_distribution_mean(0., 0., 0.);                                          INPUTGENERATOR::SimpleEventGenerator[0]->set_vertex_distribution_width(0.0, 0.0, 0.0);
+    INPUTGENERATOR::SimpleEventGenerator[0]->set_vertex_distribution_mean(0., 0., 0.);                               
+    INPUTGENERATOR::SimpleEventGenerator[0]->set_vertex_distribution_width(0.0, 0.0, 0.0);
     INPUTGENERATOR::SimpleEventGenerator[0]->set_eta_range(0, 0);
     INPUTGENERATOR::SimpleEventGenerator[0]->set_phi_range(0, 0);
     INPUTGENERATOR::SimpleEventGenerator[0]->set_pt_range(10., 10.);
