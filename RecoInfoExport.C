@@ -58,7 +58,7 @@ using namespace std;
 RecoInfoExport::RecoInfoExport(const string &name) :
     SubsysReco(name), _event(0), _calo_names(
       { "CEMC", "HCALIN", "HCALOUT" }), _tower_threshold(0), _pT_threshold(0), _min_track_hit_dist(
-        0)
+        0), _tower_PhiShift(0)
 {
 }
 
@@ -118,7 +118,7 @@ RecoInfoExport::process_event(PHCompositeNode *topNode)
         
       fdata <<"\""<<calo_name <<"\": [";
 
-      bool first = true;
+      bool first = true; float _phi = 0.;
       for (const auto & tower : good_towers)
         {
           assert(tower);
@@ -127,7 +127,8 @@ RecoInfoExport::process_event(PHCompositeNode *topNode)
           float phi = towergeom->get_phicenter(tower->get_binphi());
 
           phi = atan2(cos(phi), sin(phi));
-
+          //allow shift in phi to match event display coordinate system
+          _phi = phi - _tower_PhiShift;
           if (first)
             {
               first = false;
@@ -137,7 +138,7 @@ RecoInfoExport::process_event(PHCompositeNode *topNode)
 
            fdata
               << (boost::format(
-                    "{ \"eta\": %1%, \"phi\": %2%, \"e\": %3%}") % eta % phi % tower->get_energy()) << endl;
+                    "{ \"eta\": %1%, \"phi\": %2%, \"e\": %3%}") % eta % _phi % tower->get_energy()) << endl;
 
         }
         fdata << "]" << endl;
