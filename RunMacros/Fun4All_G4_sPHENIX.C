@@ -560,7 +560,7 @@ int Fun4All_G4_sPHENIX(
   gSystem->Load("libRecoInfoExport.so.0.0.0");
   RecoInfoExport * exp = new RecoInfoExport();
   exp->set_tower_threshold(0.1);
-  exp->set_tower_phi_shift(0.5*M_PI); //shift to match event display coordinate system
+//   exp->set_tower_phi_shift(0.5*M_PI); //shift to match event display coordinate system
   se->registerSubsystem(exp);
     
   //======================
