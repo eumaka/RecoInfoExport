@@ -118,18 +118,19 @@ RecoInfoExport::process_event(PHCompositeNode *topNode)
         
       fdata <<"\""<<calo_name <<"\": [";
 
-      bool first = true; float _phi = 0.;
+      bool first = true;
+      const double geom_ref_radius = 225.87;
       for (const auto & tower : good_towers)
         {
           assert(tower);
 
           float eta = towergeom->get_etacenter(tower->get_bineta());
           float phi = towergeom->get_phicenter(tower->get_binphi());
+            
+          const double x(geom_ref_radius * cos(phi));
+          const double y(geom_ref_radius * sin(phi));
 
-          phi = atan2(cos(phi), sin(phi));
-          //allow shift in phi to match event display coordinate system
-          _phi = phi - _tower_PhiShift;
-          if (first)
+           if (first)
             {
               first = false;
             }
@@ -138,7 +139,7 @@ RecoInfoExport::process_event(PHCompositeNode *topNode)
 
            fdata
               << (boost::format(
-                    "{ \"eta\": %1%, \"phi\": %2%, \"e\": %3%}") % eta % _phi % tower->get_energy()) << endl;
+                    "{ \"eta\": %1%, \"phi\": %2%, \"e\": %3%, \"x\": %4% , \"y\": %5%}") % eta % phi % tower->get_energy()) % x % y << endl;
 
         }
         fdata << "]" << endl;
