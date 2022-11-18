@@ -83,7 +83,6 @@ RecoInfoExport::process_event(PHCompositeNode *topNode)
   for (auto & calo_name : _calo_names)
     {
       string towernodename = "TOWER_CALIB_" + calo_name;
-      // Grab the towers
       RawTowerContainer* towers = findNode::getClass<RawTowerContainer>(topNode,
           towernodename.c_str());
       if (!towers)
