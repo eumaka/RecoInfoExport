@@ -149,7 +149,7 @@ RecoInfoExport::process_event(PHCompositeNode *topNode)
     {
         fdata << "}," << endl;
         fdata << "\"TRACKS\": {" << endl;
-        fdata << "\"TRUTHINFO\": [" << endl;
+        fdata << "\"RECOTRACKS\": [" << endl;
         
          
         stringstream spts;
@@ -179,47 +179,63 @@ RecoInfoExport::process_event(PHCompositeNode *topNode)
           pz = track->get_pz();
           mom.SetX(px); mom.SetY(py); mom.SetZ(pz);
             
-          auto tpcseed = track->get_tpc_seed();
-            
-          if(tpcseed)
-            {
-              for (auto iter = tpcseed->begin_cluster_keys(); iter != tpcseed->end_cluster_keys(); ++iter)
+          std::vector<TrkrDefs::cluskey> clusters;
+          auto siseed = track->get_silicon_seed();
+          if(siseed)
+          {
+            for (auto iter = siseed->begin_cluster_keys(); iter != siseed->end_cluster_keys(); ++iter)
                 {
-                    TrkrDefs::cluskey cluster_key = *iter;
-                    TrkrCluster* cluster = clusterContainer->findCluster(cluster_key);
-                    if(!cluster) continue;
-                    Acts::Vector3 globalClusterPosition = geometry->getGlobalPosition(cluster_key, cluster);
-                    x = globalClusterPosition(0);
-                    y = globalClusterPosition(1);
-                    z = globalClusterPosition(2);
-                    pos.SetX(x); pos.SetY(y); pos.SetZ(z);
-                    
-                    if (first)
-                    {
-                      first = false;
-                    }
-                             
-                    else
-                    spts << ",";
-                    spts << "[";
-                    spts << pos.x();
-                    spts << ",";
-                    spts << pos.y();
-                    spts << ",";
-                    spts << pos.z();
-                    spts << "]";
+                      TrkrDefs::cluskey cluster_key = *iter;
+                      clusters.push_back(cluster_key);
                 }
-                    
-                    fdata
-                       << (boost::format(
-                           "{ \"pt\": %1%, \"t\": %2%, \"e\": %3%, \"p\": %4%, \"c\": %5%, \"pts\":[ %6% ]},")
-                           % mom.Pt() % t % mom.PseudoRapidity() % mom.Phi() % c
-                           % spts.str()) << endl;
-                           spts.clear() ;
-                           spts.str("") ;
             }
+            
+          auto tpcseed = track->get_tpc_seed();
+          if(tpcseed)
+          {
+            for (auto iter = tpcseed->begin_cluster_keys(); iter != tpcseed->end_cluster_keys(); ++iter)
+                {
+                      TrkrDefs::cluskey cluster_key = *iter;
+                      clusters.push_back(cluster_key);
+                }
           }
-       }
+            
+            
+         for(unsigned int iclus = 0; iclus < clusters.size(); ++iclus)
+          {
+            TrkrDefs::cluskey cluster_key = clusters[iclus];
+            TrkrCluster* cluster = clusterContainer->findCluster(cluster_key);
+            if(!cluster) continue;
+            
+            Acts::Vector3 globalClusterPosition = geometry->getGlobalPosition(cluster_key, cluster);
+            x = globalClusterPosition(0);
+            y = globalClusterPosition(1);
+            z = globalClusterPosition(2);
+            pos.SetX(x); pos.SetY(y); pos.SetZ(z);
+                    
+            if (first)
+            {
+                first = false;
+            }
+                             
+            else
+            spts << ",";
+            spts << "[";
+            spts << pos.x();
+            spts << ",";
+            spts << pos.y();
+            spts << ",";
+            spts << pos.z();
+            spts << "]";
+        }
+            fdata
+            << (boost::format(
+              "{ \"pt\": %1%, \"t\": %2%, \"e\": %3%, \"p\": %4%, \"c\": %5%, \"pts\":[ %6% ]},")
+               % mom.Pt() % t % mom.PseudoRapidity() % mom.Phi() % c % spts.str()) << endl;
+               spts.clear();
+               spts.str("");
+    }
+}
 
    fdata << "]" << endl;
    fdata << "}}" << endl;
