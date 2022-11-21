@@ -25,6 +25,10 @@
 #include <trackbase/TrkrClusterHitAssoc.h>
 #include <trackbase/TrkrClusterIterationMapv1.h>
 
+#include <trackbase_historic/TrackSeed_v1.h>
+#include <trackbase_historic/TrackSeedContainer_v1.h>
+#include <trackbase_historic/SvtxTrackSeed_v1.h>
+
 #include <trackbase_historic/SvtxVertexMap.h>
 #include <trackbase_historic/SvtxVertex.h>
 #include <trackbase_historic/SvtxTrackMap.h>
@@ -150,14 +154,28 @@ RecoInfoExport::process_event(PHCompositeNode *topNode)
         fdata << "}," << endl;
         fdata << "\"TRACKS\": {" << endl;
         fdata << "\"RECOTRACKS\": [" << endl;
+             
+        TrackSeedContainer *_track_map = findNode::getClass<TrackSeedContainer>(topNode, "TpcTrackSeedContainer");
+        if(!_track_map)
+        {
+         std::cout << PHWHERE << "No TpcTrackSeedContainer on node tree. Can't  continue."
+               << std::endl;
+        }
         
-         
-        stringstream spts;
-        int t = 1;
-        int c = -1;
+        TrackSeedContainer *_track_map_silicon = findNode::getClass<TrackSeedContainer>(topNode, "SiliconTrackSeedContainer");
+        if(!_track_map_silicon)
+        {
+         std::cout << PHWHERE << "No SiliconTrackSeedContainer on node tree. Can't  continue."
+               << std::endl;
+        }
         
-        SvtxTrackMap* trackmap = findNode::getClass<SvtxTrackMap>(topNode, "SvtxTrackMap");
         TrkrClusterContainer *clusterContainer = findNode::getClass<TrkrClusterContainer>(topNode, "TRKR_CLUSTER");
+        if(!clusterContainer)
+        {
+         std::cout << PHWHERE << "No TRKR_CLUSTER on node tree. Can't  continue."
+               << std::endl;
+        }
+        
         ActsGeometry *geometry = findNode::getClass<ActsGeometry>(topNode, "ActsGeometry");
         if(!geometry)
         {
@@ -165,77 +183,120 @@ RecoInfoExport::process_event(PHCompositeNode *topNode)
                << std::endl;
         }
         
-        float x = 0.; float y = 0.; float z = 0.;
-        float px = 0.; float py = 0.; float pz = 0.;
-        TVector3 pos; TVector3 mom;
+        double _eta = 0.; double _phi = 0.; double _pt = 0.;
+        double _eta_si = 0.; double _phi_si = 0.; double _pt_si = 0.;
+
+        double x = 0.; double y = 0.; double z = 0.;
+        double x_si = 0.; double y_si = 0.; double z_si = 0.;
+
+        TVector3 pos; TVector3 pos_si;
         
         bool first = true;
-
-        for (SvtxTrackMap::Iter iter = trackmap->begin(); iter != trackmap->end(); ++iter)
+        stringstream spts;
+        
+        int t = 1;
+        int c = -1;
+        
+        
+        for (unsigned int phtrk_iter_si = 0; phtrk_iter_si < _track_map_silicon->size(); ++phtrk_iter_si)
         {
-          SvtxTrack* track = iter->second;
-          px = track->get_px();
-          py = track->get_py();
-          pz = track->get_pz();
-          mom.SetX(px); mom.SetY(py); mom.SetZ(pz);
+            TrackSeed  *_tracklet_si = _track_map_silicon->get(phtrk_iter_si);
+            if(!_tracklet_si) { continue; }
+            _eta_si = _tracklet_si->get_eta();
+            _phi_si = _tracklet_si->get_phi(clusterContainer,geometry);
+            _pt_si = _tracklet_si->get_pt();
             
-          std::vector<TrkrDefs::cluskey> clusters;
-          auto siseed = track->get_silicon_seed();
-          if(siseed)
-          {
-            for (auto iter = siseed->begin_cluster_keys(); iter != siseed->end_cluster_keys(); ++iter)
-                {
-                      TrkrDefs::cluskey cluster_key = *iter;
-                      clusters.push_back(cluster_key);
-                }
-            }
+            for (auto iter_si = _tracklet_si->begin_cluster_keys(); iter_si != _tracklet_si->end_cluster_keys(); ++iter_si)
+            {
+                TrkrDefs::cluskey cluster_key_si = *iter_si;
+                TrkrCluster* cluster_si = clusterContainer->findCluster(cluster_key_si);
+                if(!cluster_si) continue;
+                Acts::Vector3 globalClusterPosition_si = geometry->getGlobalPosition(cluster_key_si, cluster_si);
+                x_si = globalClusterPosition_si(0);
+                y_si = globalClusterPosition_si(1);
+                z_si = globalClusterPosition_si(2);
+
             
-          auto tpcseed = track->get_tpc_seed();
-          if(tpcseed)
-          {
-            for (auto iter = tpcseed->begin_cluster_keys(); iter != tpcseed->end_cluster_keys(); ++iter)
-                {
-                      TrkrDefs::cluskey cluster_key = *iter;
-                      clusters.push_back(cluster_key);
-                }
-          }
+            pos_si.SetX(x_si); pos_si.SetY(y_si); pos_si.SetZ(z_si);
             
-            
-         for(unsigned int iclus = 0; iclus < clusters.size(); ++iclus)
-          {
-            TrkrDefs::cluskey cluster_key = clusters[iclus];
-            TrkrCluster* cluster = clusterContainer->findCluster(cluster_key);
-            if(!cluster) continue;
-            
-            Acts::Vector3 globalClusterPosition = geometry->getGlobalPosition(cluster_key, cluster);
-            x = globalClusterPosition(0);
-            y = globalClusterPosition(1);
-            z = globalClusterPosition(2);
-            pos.SetX(x); pos.SetY(y); pos.SetZ(z);
-                    
             if (first)
             {
                 first = false;
             }
-                             
+            
             else
             spts << ",";
             spts << "[";
-            spts << pos.x();
+            spts << pos_si.x();
             spts << ",";
-            spts << pos.y();
+            spts << pos_si.y();
             spts << ",";
-            spts << pos.z();
+            spts << pos_si.z();
             spts << "]";
-        }
+                
+            }
+            
             fdata
             << (boost::format(
               "{ \"pt\": %1%, \"t\": %2%, \"e\": %3%, \"p\": %4%, \"c\": %5%, \"pts\":[ %6% ]},")
-               % mom.Pt() % t % mom.PseudoRapidity() % mom.Phi() % c % spts.str()) << endl;
+               % _pt_si % t % _eta_si % _phi_si % c % spts.str()) << endl;
                spts.clear();
                spts.str("");
-    }
-}
+        }
+
+        
+        
+        
+        bool second = true;
+        stringstream sptss;
+
+        for (unsigned int phtrk_iter = 0; phtrk_iter < _track_map->size(); ++phtrk_iter)
+        {
+            TrackSeed *_tracklet_tpc = _track_map->get(phtrk_iter);
+            if(!_tracklet_tpc) {continue;}
+            _eta = _tracklet_tpc->get_eta();
+            _phi = _tracklet_tpc->get_phi(clusterContainer,geometry);
+            _pt = _tracklet_tpc->get_pt();
+            
+            for (auto iter = _tracklet_tpc->begin_cluster_keys(); iter != _tracklet_tpc->end_cluster_keys(); ++iter)
+            {
+                TrkrDefs::cluskey cluster_key = *iter;
+                TrkrCluster* cluster = clusterContainer->findCluster(cluster_key);
+                if(!cluster) continue;
+                Acts::Vector3 globalClusterPosition = geometry->getGlobalPosition(cluster_key, cluster);
+                x = globalClusterPosition(0);
+                y = globalClusterPosition(1);
+                z = globalClusterPosition(2);
+
+            
+            pos.SetX(x); pos.SetY(y); pos.SetZ(z);
+            
+            if (second)
+            {
+                second = false;
+            }
+            
+            else
+            sptss << ",";
+            sptss << "[";
+            sptss << pos.x();
+            sptss << ",";
+            sptss << pos.y();
+            sptss << ",";
+            sptss << pos.z();
+            sptss << "]";
+                
+            }
+
+            fdata
+            << (boost::format(
+              "{ \"pt\": %1%, \"t\": %2%, \"e\": %3%, \"p\": %4%, \"c\": %5%, \"pts\":[ %6% ]},")
+               % _pt % t % _eta % _phi % c % sptss.str()) << endl;
+               sptss.clear();
+               sptss.str("");
+        }
+        
+   }
 
    fdata << "]" << endl;
    fdata << "}}" << endl;
